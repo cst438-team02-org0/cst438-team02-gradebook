@@ -12,5 +12,5 @@ public interface SectionRepository extends CrudRepository<Section, Integer> {
     List<Section> findByInstructorEmailAndYearAndSemester(String email, int year, String semester);
 
     @Query("select s from Section s " + "where s.instructorEmail=:email " + "order by s.sectionNo ")
-    List<Section> findByInstructorEmail(String email);
+    List<Section> findByInstructorEmailOrderBySectionNo(String email);
 }
