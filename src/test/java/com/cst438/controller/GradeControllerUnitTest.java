@@ -60,7 +60,7 @@ public class GradeControllerUnitTest {
   private Assignment assignmentTest2;
 
   @BeforeEach
-  public void setUp () {
+  public void setUp() {
 
     // login as instructor and get the security token
     String instructorEmail = "ted@csumb.edu";
@@ -132,7 +132,7 @@ public class GradeControllerUnitTest {
   }
 
   @AfterEach
-  public void cleanUp () {
+  public void cleanUp() {
     gradeRepository.delete(gradeTest);
     assignmentRepository.delete(assignmentTest2);
     assignmentRepository.delete(assignmentTest);
@@ -143,7 +143,7 @@ public class GradeControllerUnitTest {
   }
 
   @Test
-  public void getAssignmentBadPath () {
+  public void getAssignmentBadPath() {
     // Testing a bad path /assignment/ instead of /assignments/
     client.get()
         .uri("/assignment/" + assignmentTest.getAssignmentId() + "/grades")
@@ -197,7 +197,8 @@ public class GradeControllerUnitTest {
   @Test
   public void updateGradesBadPath() {
     // For each Grade from the returned query, transform to a GradeDTO
-    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(enrollmentTest.getStudent().getEmail())
+    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(
+            enrollmentTest.getStudent().getEmail())
         .stream()
         .map(g -> new GradeDTO(
             g.getGradeId(),
@@ -232,7 +233,8 @@ public class GradeControllerUnitTest {
   @Test
   public void updateGradesTest() {
     // For each Grade from the returned query, transform to a GradeDTO
-    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(enrollmentTest.getStudent().getEmail())
+    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(
+            enrollmentTest.getStudent().getEmail())
         .stream()
         .map(g -> new GradeDTO(
             g.getGradeId(),
