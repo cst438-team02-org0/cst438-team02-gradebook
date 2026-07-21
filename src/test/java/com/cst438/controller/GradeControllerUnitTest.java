@@ -50,6 +50,7 @@ public class GradeControllerUnitTest {
   private RegistrarServiceProxy registrarServiceProxy;
 
   private String jwt;
+  private String badJwt;
   private Section sectionTest;
   private Enrollment enrollmentTest;
   private Assignment assignmentTest;
@@ -71,6 +72,9 @@ public class GradeControllerUnitTest {
     assertNotNull(user);
 
     jwt = login(instructorEmail, password);
+
+    // bad login jwt for bad path
+    badJwt = login(studentEmail, "sam2025");
 
     // create temporary term, section, enrollment, assignment, grade
     term = new Term();
@@ -139,6 +143,33 @@ public class GradeControllerUnitTest {
   }
 
   @Test
+  public void getAssignmentBadPath () {
+    // Testing a bad path /assignment/ instead of /assignments/
+    client.get()
+        .uri("/assignment/" + assignmentTest.getAssignmentId() + "/grades")
+        .headers(headers -> headers.setBearerAuth(jwt))
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus().isNotFound();
+
+    // Testing a bad jwt
+    client.get()
+        .uri("/assignments/" + assignmentTest.getAssignmentId() + "/grades")
+        .headers(headers -> headers.setBearerAuth(badJwt))
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus().isForbidden();
+
+    // Testing a good jwt and path but wrong assignmentId
+    client.get()
+        .uri("/assignments/" + 999999 + "/grades")
+        .headers(headers -> headers.setBearerAuth(jwt))
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus().isBadRequest();
+  }
+
+  @Test
   public void getAssignmentGradesTest() {
 
     // Get grades for the assignment
@@ -160,6 +191,41 @@ public class GradeControllerUnitTest {
     List<GradeDTO> grades2 = getGradesForAssignment(assignmentTest2.getAssignmentId(), jwt);
     GradeDTO gradeDTO2 = grades2.get(0);
     assertNull(gradeDTO2.score(), "Score should be null for assignment with no grades");
+
+  }
+
+  @Test
+  public void updateGradesBadPath() {
+    // For each Grade from the returned query, transform to a GradeDTO
+    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(enrollmentTest.getStudent().getEmail())
+        .stream()
+        .map(g -> new GradeDTO(
+            g.getGradeId(),
+            g.getEnrollment().getStudent().getName(),
+            g.getEnrollment().getStudent().getEmail(),
+            g.getAssignment().getTitle(),
+            g.getAssignment().getSection().getCourse().getCourseId(),
+            g.getAssignment().getSection().getSectionId(),
+            100 // Update the score to 100 for testing
+        )).toList();
+
+    // Bad path expected /grades but path is /grade
+    client.put().uri("/grade")
+        .headers(headers -> headers.setBearerAuth(jwt))
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(dtoList)
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus().isNotFound();
+
+    // Working path bad jwt
+    client.put().uri("/grades")
+        .headers(headers -> headers.setBearerAuth(badJwt))
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(dtoList)
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        .expectStatus().isForbidden();
 
   }
 
@@ -191,7 +257,6 @@ public class GradeControllerUnitTest {
       Grade updatedGrade = gradeRepository.findById(dto.gradeId()).orElseThrow();
       assertEquals(100, updatedGrade.getScore(), "Score should be updated to 100");
     });
-
   }
 
   // Helper method to initiate the endpoint
