@@ -27,13 +27,3 @@ insert into section (section_no, course_id, section_id, term_id, building, room,
 insert into enrollment (enrollment_id, grade, section_no, user_id) values
 (1, null, 1, 2),
 (2, null, 2, 2);
-
-insert into assignment (assignment_id, section_no, title, due_date) values
-(6000, 1, 'Project 1', '2025-02-15'),
-(6001, 1, 'Project 2', '2025-03-15'),
-(6002, 2, 'Test Assignment', '2026-02-15');
-
-insert into grade (grade_id, enrollment_id, assignment_id, score) values
-(12001, 1, 6000, '80'),
-(12002, 1, 6001, '44');
-

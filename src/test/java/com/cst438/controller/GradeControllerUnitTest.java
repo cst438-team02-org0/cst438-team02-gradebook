@@ -7,11 +7,11 @@ import com.cst438.service.RegistrarServiceProxy;
 import java.util.List;
 import java.sql.Date;
 import java.time.LocalDate;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.expression.spel.ast.Assign;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -32,6 +32,12 @@ public class GradeControllerUnitTest {
   private GradeRepository gradeRepository;
 
   @Autowired
+  private TermRepository termRepository;
+
+  @Autowired
+  private CourseRepository courseRepository;
+
+  @Autowired
   private UserRepository userRepository;
 
   @Autowired
@@ -43,139 +49,125 @@ public class GradeControllerUnitTest {
   @MockitoBean
   private RegistrarServiceProxy registrarServiceProxy;
 
+  private String jwt;
+  private Section sectionTest;
+  private Enrollment enrollmentTest;
+  private Assignment assignmentTest;
+  private Grade gradeTest;
+  private Term term;
+  private Course course;
+  private Assignment assignmentTest2;
+
+  @BeforeEach
+  public void setUp () {
+
+    // login as instructor and get the security token
+    String instructorEmail = "ted@csumb.edu";
+    String password = "ted2025";
+    String studentEmail = "sam@csumb.edu";
+
+    // Use a student from data.sql
+    User user = userRepository.findByEmail(studentEmail);
+    assertNotNull(user);
+
+    jwt = login(instructorEmail, password);
+
+    // create temporary term, section, enrollment, assignment, grade
+    term = new Term();
+    int termId = nextAvailableId(20000, termRepository::existsById);
+    term.setTermId(termId);
+    term.setYear(2025);
+    term.setSemester("Fall");
+    term.setAddDate(Date.valueOf(LocalDate.of(2025, 11, 1)));
+    term.setAddDeadline(Date.valueOf(LocalDate.of(2026, 4, 30)));
+    term.setDropDeadline(Date.valueOf(LocalDate.of(2026, 4, 30)));
+    term.setStartDate(Date.valueOf(LocalDate.of(2026, 1, 15)));
+    term.setEndDate(Date.valueOf(LocalDate.of(2026, 5, 17)));
+    term = termRepository.save(term);
+
+    course = new Course();
+    course.setCourseId("cstTester");
+    course.setTitle("Test Course");
+    course.setCredits(3);
+    course = courseRepository.save(course);
+
+    sectionTest = new Section();
+    int sectionNo = nextAvailableId(3, sectionRepository::existsById);
+    sectionTest.setSectionNo(sectionNo);
+    int sectionId = nextAvailableId(3, sectionRepository::existsById);
+    sectionTest.setSectionId(sectionId);
+    sectionTest.setCourse(course);
+    sectionTest.setTerm(term);
+    sectionTest.setInstructorEmail(instructorEmail);
+    sectionTest = sectionRepository.save(sectionTest);
+
+    enrollmentTest = new Enrollment();
+    int enrollmentId = nextAvailableId(3, enrollmentRepository::existsById);
+    enrollmentTest.setEnrollmentId(enrollmentId);
+    enrollmentTest.setGrade(null);
+    enrollmentTest.setSection(sectionTest);
+    enrollmentTest.setStudent(user);
+    enrollmentTest = enrollmentRepository.save(enrollmentTest);
+
+    assignmentTest = new Assignment();
+    assignmentTest.setSection(sectionTest);
+    assignmentTest.setTitle("Test Assignment Raw");
+    assignmentTest.setDueDate(Date.valueOf(LocalDate.of(2025, 11, 15)));
+    assignmentTest = assignmentRepository.save(assignmentTest);
+
+    assignmentTest2 = new Assignment();
+    assignmentTest2.setSection(sectionTest);
+    assignmentTest2.setTitle("Test Assignment Raw 2");
+    assignmentTest2.setDueDate(Date.valueOf(LocalDate.of(2025, 12, 15)));
+    assignmentTest2 = assignmentRepository.save(assignmentTest2);
+
+    gradeTest = new Grade();
+    gradeTest.setEnrollment(enrollmentTest);
+    gradeTest.setAssignment(assignmentTest);
+    gradeTest.setScore(85);
+    gradeTest = gradeRepository.save(gradeTest);
+  }
+
+  @AfterEach
+  public void cleanUp () {
+    gradeRepository.delete(gradeTest);
+    assignmentRepository.delete(assignmentTest2);
+    assignmentRepository.delete(assignmentTest);
+    enrollmentRepository.delete(enrollmentTest);
+    sectionRepository.delete(sectionTest);
+    courseRepository.delete(course);
+    termRepository.delete(term);
+  }
+
   @Test
   public void getAssignmentGradesTest() {
 
-    // login as an instructor and get the security token
-    // make sure not to self register
-    String instructorEmail = "ted@csumb.edu";
-    String password = "ted2025";
+    // Get grades for the assignment
+    List<GradeDTO> grades = getGradesForAssignment(assignmentTest.getAssignmentId(), jwt);
 
-    // Call login helper to obtain the jwt
-    String jwt = login(instructorEmail, password);
-
-    // Get sections for the instructor
-    List<Section> sections = sectionRepository.findByInstructorEmailOrderBySectionNo(
-        instructorEmail);
-    assertNotNull(sections);
-    assertFalse(sections.isEmpty());
-
-    // Grab the first section for testing purposes
-    Section section = sections.stream()
-        .filter(s -> s.getSectionNo() == 1)
-        .findFirst()
-        .orElseThrow();
-
-    // Use a student from data.sql
-    User student = userRepository.findByEmail("sam@csumb.edu");
-    assertNotNull(student);
-
-    // Get an enrollment from enrollment repository
-    Enrollment enrollment = enrollmentRepository.findBySectionAndStudent(section.getSectionNo(),
-        student.getId());
-    assertNotNull(enrollment);
-    assertEquals(1, enrollment.getEnrollmentId());
-    assertEquals(section.getSectionNo(), enrollment.getSection().getSectionNo());
-    assertEquals(student.getId(), enrollment.getStudent().getId());
-
-    // Grabbing the first predictable test assignment from data.sql
-    Assignment assignment = assignmentRepository.findById(6000).orElseThrow();
-    assertNotNull(assignment);
-    assertEquals("Project 1", assignment.getTitle());
-
-    // Call helper method to utilize webclient for the get mapping endpoint
-    List<GradeDTO> grades = getGradesForAssignment(assignment.getAssignmentId(), jwt);
+    // Verify that the grade is returned correctly
     assertNotNull(grades);
+    assertEquals(1, grades.size());
+    GradeDTO gradeDTO = grades.get(0);
+    assertEquals(gradeTest.getGradeId(), gradeDTO.gradeId());
+    assertEquals(enrollmentTest.getStudent().getName(), gradeDTO.studentName());
+    assertEquals(enrollmentTest.getStudent().getEmail(), gradeDTO.studentEmail());
+    assertEquals(assignmentTest.getTitle(), gradeDTO.assignmentTitle());
+    assertEquals(sectionTest.getCourse().getCourseId(), gradeDTO.courseId());
+    assertEquals(sectionTest.getSectionId(), gradeDTO.sectionId());
+    assertEquals(gradeTest.getScore(), gradeDTO.score());
 
-    // Receive the GradeDTO from the list where student email and assignment title is same as
-    // the dummy versions. Checking one returned GradeDTO and comparing it to dummy values.
-    Assignment finalAssignment = assignment;
-    GradeDTO actual = grades.stream()
-        .filter(g -> g.studentEmail().equals(student.getEmail()) && g.assignmentTitle().equals(
-            finalAssignment.getTitle()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(actual);
+    // Second Test Verify a new grade has been created since old one did not exist
+    List<GradeDTO> grades2 = getGradesForAssignment(assignmentTest2.getAssignmentId(), jwt);
+    GradeDTO gradeDTO2 = grades2.get(0);
+    assertNull(gradeDTO2.score(), "Score should be null for assignment with no grades");
 
-    // Find grade by student email and the assignment id,
-    // After the endpoint, the grade was already created so it should be the same as the dummy values
-    Grade createdGrade = gradeRepository.findByStudentEmailAndAssignmentId(
-        "sam@csumb.edu", assignment.getAssignmentId());
-    assertNotNull(createdGrade);
-    assertNotNull(createdGrade.getScore(), "Score should not be null for the first grade");
-
-    // Verify that the returned GradeDTO has the correct values
-    assertEquals(createdGrade.getGradeId(), actual.gradeId());
-    assertEquals(enrollment.getStudent().getName(), actual.studentName());
-    assertEquals(enrollment.getStudent().getEmail(), actual.studentEmail());
-    assertEquals(assignment.getTitle(), actual.assignmentTitle());
-    assertEquals(assignment.getSection().getCourse().getCourseId(), actual.courseId());
-    assertEquals(assignment.getSection().getSectionId(), actual.sectionId());
-    assertEquals(createdGrade.getScore(), actual.score());
-
-    // Testing a second time but without a created grade object, finding assignment will create one
-    Section section2 = sections.stream()
-        .filter(s -> s.getSectionNo() == 2)
-        .findFirst()
-        .orElseThrow();
-
-    // Grabs the second enrollment test
-    Enrollment enrollment2 = enrollmentRepository.findBySectionAndStudent(section2.getSectionNo(),
-        student.getId());
-    assertNotNull(enrollment2);
-
-    // Grabs an assignment with the same section
-    Assignment assignment2 = assignmentRepository.findById(6002).orElseThrow();
-    assertNotNull(assignment2);
-    assertEquals("Test Assignment", assignment2.getTitle());
-
-    // Call helper method with the WebClient for requesting endpoint
-    List<GradeDTO> grades2 = getGradesForAssignment(assignment2.getAssignmentId(), jwt);
-    assertNotNull(grades2);
-
-    // Receive the GradeDTO from the list where student email and assignment title is same as
-    // the dummy versions. Checking one returned GradeDTO and comparing it to dummy values.
-    Assignment finalAssignment2 = assignment2;
-    GradeDTO actual2 = grades2.stream()
-        .filter(g -> g.studentEmail().equals(student.getEmail()) && g.assignmentTitle().equals(
-            finalAssignment2.getTitle()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(actual2);
-
-    // Find grade by student email and the assignment id,
-    // After the endpoint, the grade is created since correlated assignment grade was null
-    Grade createdGrade2 = gradeRepository.findByStudentEmailAndAssignmentId(
-        "sam@csumb.edu", assignment2.getAssignmentId());
-    assertNotNull(createdGrade2);
-    assertNull(createdGrade2.getScore(), "Score should be null for the second grade");
-
-    // Verify that the returned GradeDTO has the correct values
-    assertEquals(createdGrade2.getGradeId(), actual2.gradeId());
-    assertEquals(enrollment2.getStudent().getName(), actual2.studentName());
-    assertEquals(enrollment2.getStudent().getEmail(), actual2.studentEmail());
-    assertEquals(assignment2.getTitle(), actual2.assignmentTitle());
-    assertEquals(assignment2.getSection().getCourse().getCourseId(), actual2.courseId());
-    assertEquals(assignment2.getSection().getSectionId(), actual2.sectionId());
-    assertNull(actual2.score(), "Score should be null for the second grade");
   }
 
   @Test
   public void updateGradesTest() {
-    // login as an instructor and get the security token
-    // make sure not to self register
-    String instructorEmail = "ted@csumb.edu";
-    String password = "ted2025";
-
-    // Call login helper to obtain the jwt
-    String jwt = login(instructorEmail, password);
-
-    // Get an enrollment for testing
-    Enrollment enrollment = enrollmentRepository.findById(1).orElseThrow();
-    assertEquals(1, enrollment.getEnrollmentId());
-
-    // Create a dummy GradeDTO to update the score
-    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(enrollment.getStudent().getEmail())
+    // For each Grade from the returned query, transform to a GradeDTO
+    List<GradeDTO> dtoList = gradeRepository.findByStudentEmail(enrollmentTest.getStudent().getEmail())
         .stream()
         .map(g -> new GradeDTO(
             g.getGradeId(),
@@ -202,7 +194,6 @@ public class GradeControllerUnitTest {
     });
 
   }
-
 
   // Helper method to initiate the endpoint
   private List<GradeDTO> getGradesForAssignment(int assignmentId, String jwt) {
@@ -231,5 +222,13 @@ public class GradeControllerUnitTest {
     String jwt = login_dto.getResponseBody().jwt();
     assertNotNull(jwt);
     return jwt;
+  }
+
+  private int nextAvailableId(int start, java.util.function.IntPredicate exists) {
+    int candidate = start;
+    while (exists.test(candidate)) {
+      candidate++;
+    }
+    return candidate;
   }
 }
