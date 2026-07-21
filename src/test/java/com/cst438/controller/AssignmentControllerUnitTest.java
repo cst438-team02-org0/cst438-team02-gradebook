@@ -67,7 +67,7 @@ public class AssignmentControllerUnitTest {
   @AfterEach
   public void cleanUp() {
     // grades must be deleted before their assignments
-    for(Integer id : gradeIds) {
+    for (Integer id : gradeIds) {
       if (gradeRepository.existsById(id)) {
         gradeRepository.deleteById(id);
       }
