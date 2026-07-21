@@ -94,8 +94,7 @@ public class GradeControllerUnitTest {
     sectionTest = new Section();
     int sectionNo = nextAvailableId(3, sectionRepository::existsById);
     sectionTest.setSectionNo(sectionNo);
-    int sectionId = nextAvailableId(3, sectionRepository::existsById);
-    sectionTest.setSectionId(sectionId);
+    sectionTest.setSectionId(sectionNo);
     sectionTest.setCourse(course);
     sectionTest.setTerm(term);
     sectionTest.setInstructorEmail(instructorEmail);
