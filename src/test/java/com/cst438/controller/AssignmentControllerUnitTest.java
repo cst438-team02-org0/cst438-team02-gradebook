@@ -351,6 +351,51 @@ public class AssignmentControllerUnitTest {
         "assignments were not ordered by due date");
   }
 
+  // Test createAssignment w/ due date outside section term
+  // controller should reject request w/ BAD_REQUEST
+  @Test
+  public void instructorCannotCreateAssignmentWithInvalidDueDate() {
+    LocalDate termEnd =
+        section.getTerm().getEndDate().toLocalDate();
+    Date invalidDueDate =
+        Date.valueOf(termEnd.plusDays(1));
+    AssignmentDTO assignmentDTO = new AssignmentDTO(
+        0,
+        "Invalid Due Date Assignment",
+        invalidDueDate.toString(),
+        section.getCourse().getCourseId(),
+        section.getSectionId(),
+        section.getSectionNo()
+    );
+
+    client.post()
+        .uri("/assignments")
+        .headers(headers ->
+            headers.setBearerAuth(instructorJwt))
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(assignmentDTO)
+        .exchange()
+        .expectStatus().isBadRequest();
+  }
+
+  // Test deleting an assignment that does not exist
+  // controller should return BAD_REQUEST
+  @Test
+  public void instructorCannotDeleteAssignmentNotFound() {
+    int missingAssignmentId = 999999;
+
+    while (assignmentRepository.existsById(missingAssignmentId)) {
+      missingAssignmentId++;
+    }
+
+    client.delete()
+        .uri("/assignments/" + missingAssignmentId)
+        .headers(headers ->
+            headers.setBearerAuth(instructorJwt))
+        .exchange()
+        .expectStatus().isBadRequest();
+  }
+
   // Login and return JWT
   private String login(String email, String password) {
     EntityExchangeResult<LoginDTO> result =
